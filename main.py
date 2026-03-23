@@ -35,6 +35,7 @@ SYMBOL = os.getenv('SYMBOL', 'RESOLVUSDT')
 FUNDING_TIME_HHMM = os.getenv('FUNDING_TIME_HHmm', '17:30')
 ENTRY_DELAY_MS = int(os.getenv('ENTRY_DELAY_MS', '100'))
 EXIT_DELAY_S = int(os.getenv('EXIT_DELAY_S', '2'))
+LEVERAGE = int(os.getenv('LEVERAGE', '10'))
 
 # Timing precision targets (in milliseconds)
 ENTRY_TIMING_TARGET_MS = 0.1  # 0.1 seconds after funding
@@ -141,7 +142,8 @@ class BybitClient:
         order_type: str,
         qty: float,
         reduce_only: bool = False,
-        retry_count: int = 0
+        retry_count: int = 0,
+        leverage: int = 1
     ) -> Optional[Dict]:
         """Place an order with retry logic."""
         try:
@@ -152,7 +154,8 @@ class BybitClient:
                 orderType=order_type,
                 qty=str(qty),
                 reduceOnly=reduce_only,
-                timeInForce="IOC" if order_type == "Market" else "GTC"
+                timeInForce="IOC" if order_type == "Market" else "GTC",
+                leverage=str(leverage)
             )
 
             if response['retCode'] == 0:
@@ -166,14 +169,14 @@ class BybitClient:
                 if retry_count < MAX_RETRIES:
                     logger.info(f"Retrying... ({retry_count + 1}/{MAX_RETRIES})")
                     time.sleep(RETRY_DELAY_MS / 1000.0)
-                    return self.place_order(symbol, side, order_type, qty, reduce_only, retry_count + 1)
+                    return self.place_order(symbol, side, order_type, qty, reduce_only, retry_count + 1, leverage)
                 return None
 
         except Exception as e:
             logger.error(f"[FAIL] Exception while placing order: {e}")
             if retry_count < MAX_RETRIES:
                 time.sleep(RETRY_DELAY_MS / 1000.0)
-                return self.place_order(symbol, side, order_type, qty, reduce_only, retry_count + 1)
+                return self.place_order(symbol, side, order_type, qty, reduce_only, retry_count + 1, leverage)
             return None
 
     def get_position(self, symbol: str) -> Optional[Dict]:
@@ -362,7 +365,8 @@ class BybitTradingBot:
                 side="Sell",
                 order_type="Market",
                 qty=self.entry_qty,
-                reduce_only=False
+                reduce_only=False,
+                leverage=LEVERAGE
             )
 
             if not order_response:
@@ -460,7 +464,8 @@ class BybitTradingBot:
                 side="Buy",
                 order_type="Market",
                 qty=self.entry_qty,
-                reduce_only=True
+                reduce_only=True,
+                leverage=LEVERAGE
             )
 
             if not order_response:
@@ -558,6 +563,7 @@ class BybitTradingBot:
             logger.info("="*70)
             logger.info(f"Symbol:        {self.symbol}")
             logger.info(f"Position Size: ${self.position_size_usdt:.2f}")
+            logger.info(f"Leverage:      {LEVERAGE}x")
             logger.info(f"Funding Time:  {FUNDING_TIME_HHMM}")
             logger.info(f"Entry Delay:   {ENTRY_DELAY_MS}ms after funding")
             logger.info(f"Exit Time:     {EXIT_DELAY_S}s after entry")
